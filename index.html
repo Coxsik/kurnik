@@ -10,9 +10,28 @@
     :root { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #22c55e; --red: #ef4444; --orange: #f59e0b; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background: var(--bg); color: var(--text); padding-bottom: 85px; }
-    header { padding: 16px 20px; background: var(--card); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
-    .status { font-size: 0.85rem; padding: 4px 10px; border-radius: 99px; background: #334155; color: var(--muted); font-weight: 600; }
+
+    /* Ekran logowania */
+    #loginScreen { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 1000; }
+    .login-card { background: var(--card); border: 1px solid #334155; border-radius: 16px; padding: 24px; width: 100%; max-width: 380px; }
+    .login-card h1 { font-size: 1.4rem; margin-bottom: 6px; text-align: center; }
+    .login-card p { font-size: 0.85rem; color: var(--muted); text-align: center; margin-bottom: 20px; }
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    .form-group input[type="text"], .form-group input[type="password"] { width: 100%; background: #0f172a; border: 1px solid #475569; color: white; padding: 12px; border-radius: 10px; font-size: 1rem; }
+    .remember-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--muted); margin-bottom: 16px; }
+    .login-error { color: var(--red); font-size: 0.85rem; text-align: center; margin-top: 12px; min-height: 20px; }
+
+    /* Główna aplikacja */
+    #appContent { display: none; }
+    header { padding: 14px 16px; background: var(--card); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+    header h1 { font-size: 1.25rem; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .status { font-size: 0.8rem; padding: 4px 10px; border-radius: 99px; background: #334155; color: var(--muted); font-weight: 600; }
     .status.online { background: rgba(34, 197, 94, 0.2); color: var(--green); }
+    .btn-logout { background: #334155; color: var(--muted); border: none; padding: 5px 10px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; }
+    .btn-logout:hover { color: white; }
+
     .container { padding: 16px; max-width: 600px; margin: 0 auto; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
@@ -36,7 +55,7 @@
     .stat-lbl { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
 
     .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-    button { border: none; padding: 14px; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; color: white; transition: opacity 0.2s; }
+    button.action-btn, .btn-accent, .btn-open, .btn-close, .btn-mode { border: none; padding: 14px; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; color: white; transition: opacity 0.2s; }
     button:active { opacity: 0.7; }
     button:disabled { opacity: 0.35; cursor: not-allowed; }
     .btn-open { background: var(--green); }
@@ -55,124 +74,154 @@
     input[type="time"], input[type="number"] { background: #0f172a; border: 1px solid #475569; color: white; padding: 10px; border-radius: 8px; font-size: 1rem; width: 130px; text-align: center; }
 
     .nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); display: flex; border-top: 1px solid #334155; }
-    .nav button { flex: 1; background: transparent; color: var(--muted); border-radius: 0; padding: 16px 8px; font-size: 0.9rem; }
+    .nav button { flex: 1; background: transparent; border: none; color: var(--muted); border-radius: 0; padding: 16px 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
     .nav button.active { color: var(--accent); border-top: 3px solid var(--accent); }
     canvas { max-height: 260px; }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>Smart Kurnik</h1>
-  <div id="connStatus" class="status">Łączenie...</div>
-</header>
-
-<div class="container">
-  <!-- ZAKŁADKA 1: STEROWANIE -->
-  <div id="tab-control" class="tab-content active">
-    <div class="card">
-      <div class="card-header"><h2>Stan bieżący</h2></div>
-      <div class="stats-grid">
-        <div class="stat-box"><div id="valTemp" class="stat-val">-- °C</div><div class="stat-lbl">Temperatura</div></div>
-        <div class="stat-box"><div id="valHum" class="stat-val">-- %</div><div class="stat-lbl">Wilgotność</div></div>
-        <div class="stat-box"><div id="valHens" class="stat-val">--</div><div class="stat-lbl">Kury (RFID)</div></div>
+<!-- EKRAN LOGOWANIA -->
+<div id="loginScreen">
+  <div class="login-card">
+    <h1>Smart Kurnik</h1>
+    <p>Zaloguj się danymi z brokera EMQX</p>
+    <form onsubmit="handleLogin(event)">
+      <div class="form-group">
+        <label for="loginUser">Login</label>
+        <input type="text" id="loginUser" placeholder="login" required autocomplete="username">
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header"><h2>Tryb pracy systemu</h2></div>
-      <div class="btn-row">
-        <button id="btnAuto" class="btn-mode active" onclick="setMode('AUTO')">Tryb AUTO</button>
-        <button id="btnManual" class="btn-mode" onclick="setMode('MANUAL')">Tryb MANUAL</button>
+      <div class="form-group">
+        <label for="loginPass">Hasło</label>
+        <input type="password" id="loginPass" placeholder="••••••••" required autocomplete="current-password">
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2>Drzwi kurnika</h2>
-        <div id="doorStatus" class="badge">Brak danych</div>
-      </div>
-      <div class="btn-row">
-        <button id="btnDoorOpen" class="btn-open" onclick="controlDoor('OTWORZ')" disabled>Otwórz drzwi</button>
-        <button id="btnDoorClose" class="btn-close" onclick="controlDoor('ZAMKNIJ')" disabled>Zamknij drzwi</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <h2>Wentylator</h2>
-        <div id="fanStatus" class="badge">Brak danych</div>
-      </div>
-      <div class="btn-row">
-        <button id="btnFanOn" class="btn-open" onclick="controlFan('ON')" disabled>Włącz</button>
-        <button id="btnFanOff" class="btn-close" onclick="controlFan('OFF')" disabled>Wyłącz</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header"><h2>Dozownik paszy</h2></div>
-      <div class="feed-row">
-        <div class="feed-info">
-          <span id="displayFeedGrams">150 g</span>
-          <small>Porcja</small>
-        </div>
-        <button class="btn-accent" onclick="dispenseFeed()">Podaj paszę teraz</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ZAKŁADKA 2: WYKRESY -->
-  <div id="tab-charts" class="tab-content">
-    <div class="card">
-      <div class="card-header"><h2>Temperatura i wilgotność</h2></div>
-      <canvas id="envChart"></canvas>
-    </div>
-    <div class="card">
-      <div class="card-header"><h2>Liczba kur w kurniku (RFID)</h2></div>
-      <canvas id="hensChart"></canvas>
-    </div>
-  </div>
-
-  <!-- ZAKŁADKA 3: EDYCJA -->
-  <div id="tab-edit" class="tab-content">
-    <div class="card">
-      <div class="card-header"><h2>Harmonogram drzwi (AUTO)</h2></div>
-      <div class="input-row">
-        <label for="timeOpen">Godzina otwarcia:</label>
-        <input type="time" id="timeOpen" value="06:30">
-      </div>
-      <div class="input-row">
-        <label for="timeClose">Godzina zamknięcia:</label>
-        <input type="time" id="timeClose" value="20:00">
-      </div>
-      <button class="btn-accent" onclick="saveSchedule()">Zapisz harmonogram</button>
-    </div>
-
-    <div class="card">
-      <div class="card-header"><h2>Ustawienia dozownika</h2></div>
-      <div class="input-row">
-        <label for="feedAmount">Domyślna porcja (g):</label>
-        <input type="number" id="feedAmount" value="150" min="50" max="1000" step="50">
-      </div>
-      <button class="btn-accent" onclick="saveFeedSettings()">Zapisz ilość paszy</button>
-    </div>
+      <label class="remember-row">
+        <input type="checkbox" id="rememberMe" checked>
+        Zapamiętaj mnie na tym urządzeniu
+      </label>
+      <button type="submit" id="btnLogin" class="btn-accent">Zaloguj</button>
+      <div id="loginError" class="login-error"></div>
+    </form>
   </div>
 </div>
 
-<nav class="nav">
-  <button id="nav-control" class="active" onclick="switchTab('control')">Sterowanie</button>
-  <button id="nav-charts" onclick="switchTab('charts')">Wykresy</button>
-  <button id="nav-edit" onclick="switchTab('edit')">Edycja</button>
-</nav>
+<!-- GŁÓWNA APLIKACJA -->
+<div id="appContent">
+  <header>
+    <h1>Smart Kurnik</h1>
+    <div class="header-right">
+      <div id="connStatus" class="status">Łączenie...</div>
+      <button class="btn-logout" onclick="logout()">Wyloguj</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- ZAKŁADKA 1: STEROWANIE -->
+    <div id="tab-control" class="tab-content active">
+      <div class="card">
+        <div class="card-header"><h2>Stan bieżący</h2></div>
+        <div class="stats-grid">
+          <div class="stat-box"><div id="valTemp" class="stat-val">-- °C</div><div class="stat-lbl">Temperatura</div></div>
+          <div class="stat-box"><div id="valHum" class="stat-val">-- %</div><div class="stat-lbl">Wilgotność</div></div>
+          <div class="stat-box"><div id="valHens" class="stat-val">--</div><div class="stat-lbl">Kury (RFID)</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Tryb pracy systemu</h2></div>
+        <div class="btn-row">
+          <button id="btnAuto" class="btn-mode active" onclick="setMode('AUTO')">Tryb AUTO</button>
+          <button id="btnManual" class="btn-mode" onclick="setMode('MANUAL')">Tryb MANUAL</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Drzwi kurnika</h2>
+          <div id="doorStatus" class="badge">Brak danych</div>
+        </div>
+        <div class="btn-row">
+          <button id="btnDoorOpen" class="btn-open" onclick="controlDoor('OTWORZ')" disabled>Otwórz drzwi</button>
+          <button id="btnDoorClose" class="btn-close" onclick="controlDoor('ZAMKNIJ')" disabled>Zamknij drzwi</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2>Wentylator</h2>
+          <div id="fanStatus" class="badge">Brak danych</div>
+        </div>
+        <div class="btn-row">
+          <button id="btnFanOn" class="btn-open" onclick="controlFan('ON')" disabled>Włącz</button>
+          <button id="btnFanOff" class="btn-close" onclick="controlFan('OFF')" disabled>Wyłącz</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Dozownik paszy</h2></div>
+        <div class="feed-row">
+          <div class="feed-info">
+            <span id="displayFeedGrams">150 g</span>
+            <small>Porcja</small>
+          </div>
+          <button class="btn-accent" onclick="dispenseFeed()">Podaj paszę teraz</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ZAKŁADKA 2: WYKRESY -->
+    <div id="tab-charts" class="tab-content">
+      <div class="card">
+        <div class="card-header"><h2>Temperatura i wilgotność</h2></div>
+        <canvas id="envChart"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Liczba kur w kurniku (RFID)</h2></div>
+        <canvas id="hensChart"></canvas>
+      </div>
+    </div>
+
+    <!-- ZAKŁADKA 3: EDYCJA -->
+    <div id="tab-edit" class="tab-content">
+      <div class="card">
+        <div class="card-header"><h2>Harmonogram drzwi (AUTO)</h2></div>
+        <div class="input-row">
+          <label for="timeOpen">Godzina otwarcia:</label>
+          <input type="time" id="timeOpen" value="06:30">
+        </div>
+        <div class="input-row">
+          <label for="timeClose">Godzina zamknięcia:</label>
+          <input type="time" id="timeClose" value="20:00">
+        </div>
+        <button class="btn-accent" onclick="saveSchedule()">Zapisz harmonogram</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2>Ustawienia dozownika</h2></div>
+        <div class="input-row">
+          <label for="feedAmount">Domyślna porcja (g):</label>
+          <input type="number" id="feedAmount" value="150" min="50" max="1000" step="50">
+        </div>
+        <button class="btn-accent" onclick="saveFeedSettings()">Zapisz ilość paszy</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <button id="nav-control" class="active" onclick="switchTab('control')">Sterowanie</button>
+    <button id="nav-charts" onclick="switchTab('charts')">Wykresy</button>
+    <button id="nav-edit" onclick="switchTab('edit')">Edycja</button>
+  </nav>
+</div>
 
 <script>
   // ================= KONFIGURACJA EMQX =================
   const BROKER_HOST = 'jf324f17.ala.eu-central-1.emqxsl.com'; // Wklej swój Address z EMQX (bez https://)
-  const MQTT_USER   = 'kurnik';               // Twój login z Authentication
-  const MQTT_PASS   = 'kurnikkurnikkurnik';          // Twoje hasło z Authentication
   const DOOR_TIMEOUT_MS = 2000;               // Czas oczekiwania na krańcówkę (2000 ms = 2 s)
   // =====================================================
 
+  let client = null;
+  let isLoggedIn = false;
   let currentMode = 'AUTO';
   let doorTimer = null;
 
@@ -180,33 +229,111 @@
   document.getElementById('feedAmount').value = savedGrams;
   document.getElementById('displayFeedGrams').textContent = savedGrams + ' g';
 
-  const client = mqtt.connect(`wss://${BROKER_HOST}:8084/mqtt`, {
-    username: MQTT_USER,
-    password: MQTT_PASS,
-    clientId: 'kurnik_web_' + Math.random().toString(16).slice(2, 8)
-  });
-
   const statusEl = document.getElementById('connStatus');
 
-  client.on('connect', () => {
-    console.log('Połączono z EMQX!');
-    statusEl.textContent = 'Online';
-    statusEl.classList.add('online');
-    client.subscribe('kurnik/czujniki');
-  });
+  function connectMQTT(username, password, saveCreds) {
+    const btnLogin = document.getElementById('btnLogin');
+    const errEl = document.getElementById('loginError');
+    errEl.textContent = '';
+    btnLogin.disabled = true;
+    btnLogin.textContent = 'Łączenie...';
 
-  client.on('close', () => {
-    statusEl.textContent = 'Rozłączono';
-    statusEl.classList.remove('online');
-  });
+    if (client) {
+      client.end(true);
+      client = null;
+    }
 
-  client.on('error', (err) => {
-    console.error('Błąd MQTT:', err);
-  });
+    client = mqtt.connect(`wss://${BROKER_HOST}:8084/mqtt`, {
+      username: username,
+      password: password,
+      clientId: 'kurnik_web_' + Math.random().toString(16).slice(2, 8),
+      reconnectPeriod: 3000
+    });
 
-  client.on('reconnect', () => {
-    console.log('Ponawiam połączenie z:', BROKER_HOST);
-  });
+    client.on('connect', () => {
+      console.log('Połączono z EMQX!');
+      isLoggedIn = true;
+      if (saveCreds) {
+        localStorage.setItem('kurnik_user', username);
+        localStorage.setItem('kurnik_pass', password);
+      }
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appContent').style.display = 'block';
+      statusEl.textContent = 'Online';
+      statusEl.classList.add('online');
+      client.subscribe('kurnik/czujniki');
+    });
+
+    client.on('error', (err) => {
+      console.error('Błąd MQTT:', err);
+      if (!isLoggedIn) {
+        client.end(true);
+        btnLogin.disabled = false;
+        btnLogin.textContent = 'Zaloguj';
+        errEl.textContent = 'Błędny login/hasło lub brak połączenia z brokerem.';
+      }
+    });
+
+    client.on('close', () => {
+      statusEl.textContent = 'Rozłączono';
+      statusEl.classList.remove('online');
+      if (!isLoggedIn && btnLogin.disabled) {
+        client.end(true);
+        btnLogin.disabled = false;
+        btnLogin.textContent = 'Zaloguj';
+        if (!errEl.textContent) {
+          errEl.textContent = 'Odrzucono połączenie. Sprawdź login i hasło.';
+        }
+      }
+    });
+
+    client.on('message', (topic, message) => {
+      if (topic === 'kurnik/czujniki') {
+        try {
+          const data = JSON.parse(message.toString());
+          if (data.temp !== undefined) document.getElementById('valTemp').textContent = data.temp + ' °C';
+          if (data.wilg !== undefined) document.getElementById('valHum').textContent = data.wilg + ' %';
+          if (data.kury !== undefined) document.getElementById('valHens').textContent = data.kury;
+          if (data.drzwi !== undefined) updateDoorBadge(data.drzwi === 'OTWARTE' || data.drzwi === true);
+          if (data.wentylator !== undefined) updateFanBadge(data.wentylator === 'ON' || data.wentylator === true);
+          addChartPoint(data);
+        } catch (e) { console.error('Błąd JSON:', e); }
+      }
+    });
+  }
+
+  function handleLogin(e) {
+    e.preventDefault();
+    const user = document.getElementById('loginUser').value.trim();
+    const pass = document.getElementById('loginPass').value;
+    const remember = document.getElementById('rememberMe').checked;
+    connectMQTT(user, pass, remember);
+  }
+
+  function logout() {
+    localStorage.removeItem('kurnik_user');
+    localStorage.removeItem('kurnik_pass');
+    isLoggedIn = false;
+    if (client) {
+      client.end(true);
+      client = null;
+    }
+    document.getElementById('appContent').style.display = 'none';
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('loginPass').value = '';
+    document.getElementById('btnLogin').disabled = false;
+    document.getElementById('btnLogin').textContent = 'Zaloguj';
+    document.getElementById('loginError').textContent = '';
+  }
+
+  // Automatyczne logowanie, jeśli dane są zapisane w pamięci przeglądarki
+  const savedUser = localStorage.getItem('kurnik_user');
+  const savedPass = localStorage.getItem('kurnik_pass');
+  if (savedUser && savedPass) {
+    document.getElementById('loginUser').value = savedUser;
+    document.getElementById('loginPass').value = savedPass;
+    connectMQTT(savedUser, savedPass, true);
+  }
 
   function clearDoorTimer() {
     if (doorTimer) {
@@ -248,22 +375,10 @@
     fanEl.className = 'badge';
   }
 
-  client.on('message', (topic, message) => {
-    if (topic === 'kurnik/czujniki') {
-      try {
-        const data = JSON.parse(message.toString());
-        if (data.temp !== undefined) document.getElementById('valTemp').textContent = data.temp + ' °C';
-        if (data.wilg !== undefined) document.getElementById('valHum').textContent = data.wilg + ' %';
-        if (data.kury !== undefined) document.getElementById('valHens').textContent = data.kury;
-        if (data.drzwi !== undefined) updateDoorBadge(data.drzwi === 'OTWARTE' || data.drzwi === true);
-        if (data.wentylator !== undefined) updateFanBadge(data.wentylator === 'ON' || data.wentylator === true);
-        addChartPoint(data);
-      } catch (e) { console.error('Błąd JSON:', e); }
-    }
-  });
-
   function sendCmd(topic, payload) {
-    client.publish(topic, payload);
+    if (client && client.connected) {
+      client.publish(topic, payload);
+    }
   }
 
   function setMode(mode) {
