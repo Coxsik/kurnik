@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Smart Kurnik</title>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --muted: #94a3b8; --accent: #38bdf8; --green: #22c55e; --red: #ef4444; --orange: #f59e0b; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding-bottom: 85px; }
+    header { padding: 16px 20px; background: var(--card); display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; }
+    .status { font-size: 0.85rem; padding: 4px 10px; border-radius: 99px; background: #334155; color: var(--muted); font-weight: 600; }
+    .status.online { background: rgba(34, 197, 94, 0.2); color: var(--green); }
+    .container { padding: 16px; max-width: 600px; margin: 0 auto; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .card { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 16px; border: 1px solid #334155; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card h2 { font-size: 0.95rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .badge { font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 8px; text-transform: uppercase; background: #334155; color: var(--muted); }
+    .badge.green { background: rgba(34, 197, 94, 0.2); color: var(--green); border: 1px solid rgba(34, 197, 94, 0.4); }
+    .badge.red { background: rgba(239, 68, 68, 0.2); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.4); }
+    .badge.orange { background: rgba(245, 158, 11, 0.2); color: var(--orange); border: 1px solid rgba(245, 158, 11, 0.4); animation: pulse 1s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.45; }
+    }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
+    .stat-box { background: #0f172a; padding: 12px 8px; border-radius: 10px; }
+    .stat-val { font-size: 1.35rem; font-weight: bold; color: var(--accent); }
+    .stat-lbl { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+
+    .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    button { border: none; padding: 14px; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; color: white; transition: opacity 0.2s; }
+    button:active { opacity: 0.7; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-open { background: var(--green); }
+    .btn-close { background: var(--red); }
+    .btn-accent { background: var(--accent); color: #0f172a; width: 100%; margin-top: 10px; }
+    .btn-mode { background: #334155; }
+    .btn-mode.active { background: var(--accent); color: #0f172a; }
+
+    .feed-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .feed-info { background: #0f172a; padding: 12px 16px; border-radius: 10px; text-align: center; min-width: 100px; border: 1px solid #334155; }
+    .feed-info span { display: block; font-size: 1.2rem; font-weight: bold; color: var(--accent); }
+    .feed-info small { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+    .feed-row button { flex: 1; margin-top: 0; }
+
+    .input-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    input[type="time"], input[type="number"] { background: #0f172a; border: 1px solid #475569; color: white; padding: 10px; border-radius: 8px; font-size: 1rem; width: 130px; text-align: center; }
+
+    .nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); display: flex; border-top: 1px solid #334155; }
+    .nav button { flex: 1; background: transparent; color: var(--muted); border-radius: 0; padding: 16px 8px; font-size: 0.9rem; }
+    .nav button.active { color: var(--accent); border-top: 3px solid var(--accent); }
+    canvas { max-height: 260px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Smart Kurnik</h1>
+  <div id="connStatus" class="status">Łączenie...</div>
+</header>
+
+<div class="container">
+  <!-- ZAKŁADKA 1: STEROWANIE -->
+  <div id="tab-control" class="tab-content active">
+    <div class="card">
+      <div class="card-header"><h2>Stan bieżący</h2></div>
+      <div class="stats-grid">
+        <div class="stat-box"><div id="valTemp" class="stat-val">-- °C</div><div class="stat-lbl">Temperatura</div></div>
+        <div class="stat-box"><div id="valHum" class="stat-val">-- %</div><div class="stat-lbl">Wilgotność</div></div>
+        <div class="stat-box"><div id="valHens" class="stat-val">--</div><div class="stat-lbl">Kury (RFID)</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Tryb pracy systemu</h2></div>
+      <div class="btn-row">
+        <button id="btnAuto" class="btn-mode active" onclick="setMode('AUTO')">Tryb AUTO</button>
+        <button id="btnManual" class="btn-mode" onclick="setMode('MANUAL')">Tryb MANUAL</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Drzwi kurnika</h2>
+        <div id="doorStatus" class="badge">Brak danych</div>
+      </div>
+      <div class="btn-row">
+        <button id="btnDoorOpen" class="btn-open" onclick="controlDoor('OTWORZ')" disabled>Otwórz drzwi</button>
+        <button id="btnDoorClose" class="btn-close" onclick="controlDoor('ZAMKNIJ')" disabled>Zamknij drzwi</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Wentylator</h2>
+        <div id="fanStatus" class="badge">Brak danych</div>
+      </div>
+      <div class="btn-row">
+        <button id="btnFanOn" class="btn-open" onclick="controlFan('ON')" disabled>Włącz</button>
+        <button id="btnFanOff" class="btn-close" onclick="controlFan('OFF')" disabled>Wyłącz</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Dozownik paszy</h2></div>
+      <div class="feed-row">
+        <div class="feed-info">
+          <span id="displayFeedGrams">150 g</span>
+          <small>Porcja</small>
+        </div>
+        <button class="btn-accent" onclick="dispenseFeed()">Podaj paszę teraz</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZAKŁADKA 2: WYKRESY -->
+  <div id="tab-charts" class="tab-content">
+    <div class="card">
+      <div class="card-header"><h2>Temperatura i wilgotność</h2></div>
+      <canvas id="envChart"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2>Liczba kur w kurniku (RFID)</h2></div>
+      <canvas id="hensChart"></canvas>
+    </div>
+  </div>
+
+  <!-- ZAKŁADKA 3: EDYCJA -->
+  <div id="tab-edit" class="tab-content">
+    <div class="card">
+      <div class="card-header"><h2>Harmonogram drzwi (AUTO)</h2></div>
+      <div class="input-row">
+        <label for="timeOpen">Godzina otwarcia:</label>
+        <input type="time" id="timeOpen" value="06:30">
+      </div>
+      <div class="input-row">
+        <label for="timeClose">Godzina zamknięcia:</label>
+        <input type="time" id="timeClose" value="20:00">
+      </div>
+      <button class="btn-accent" onclick="saveSchedule()">Zapisz harmonogram</button>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2>Ustawienia dozownika</h2></div>
+      <div class="input-row">
+        <label for="feedAmount">Domyślna porcja (g):</label>
+        <input type="number" id="feedAmount" value="150" min="50" max="1000" step="50">
+      </div>
+      <button class="btn-accent" onclick="saveFeedSettings()">Zapisz ilość paszy</button>
+    </div>
+  </div>
+</div>
+
+<nav class="nav">
+  <button id="nav-control" class="active" onclick="switchTab('control')">Sterowanie</button>
+  <button id="nav-charts" onclick="switchTab('charts')">Wykresy</button>
+  <button id="nav-edit" onclick="switchTab('edit')">Edycja</button>
+</nav>
+
+<script>
+  // ================= KONFIGURACJA EMQX =================
+  const BROKER_HOST = 'jf324f17.ala.eu-central-1.emqxsl.com'; // Wklej swój Address z EMQX (bez https://)
+  const MQTT_USER   = 'kurnik';               // Twój login z Authentication
+  const MQTT_PASS   = 'kurnikkurnikkurnik';          // Twoje hasło z Authentication
+  const DOOR_TIMEOUT_MS = 2000;               // Czas oczekiwania na krańcówkę (2000 ms = 2 s)
+  // =====================================================
+
+  let currentMode = 'AUTO';
+  let doorTimer = null;
+
+  const savedGrams = localStorage.getItem('kurnik_feed_grams') || '150';
+  document.getElementById('feedAmount').value = savedGrams;
+  document.getElementById('displayFeedGrams').textContent = savedGrams + ' g';
+
+  const client = mqtt.connect(`wss://${BROKER_HOST}:8084/mqtt`, {
+    username: MQTT_USER,
+    password: MQTT_PASS,
+    clientId: 'kurnik_web_' + Math.random().toString(16).slice(2, 8)
+  });
+
+  const statusEl = document.getElementById('connStatus');
+
+  client.on('connect', () => {
+    console.log('Połączono z EMQX!');
+    statusEl.textContent = 'Online';
+    statusEl.classList.add('online');
+    client.subscribe('kurnik/czujniki');
+  });
+
+  client.on('close', () => {
+    statusEl.textContent = 'Rozłączono';
+    statusEl.classList.remove('online');
+  });
+
+  client.on('error', (err) => {
+    console.error('Błąd MQTT:', err);
+  });
+
+  client.on('reconnect', () => {
+    console.log('Ponawiam połączenie z:', BROKER_HOST);
+  });
+
+  function clearDoorTimer() {
+    if (doorTimer) {
+      clearTimeout(doorTimer);
+      doorTimer = null;
+    }
+  }
+
+  function updateDoorBadge(isOpen) {
+    clearDoorTimer();
+    const doorEl = document.getElementById('doorStatus');
+    if (isOpen) {
+      doorEl.textContent = 'Otwarte';
+      doorEl.className = 'badge green';
+    } else {
+      doorEl.textContent = 'Zamknięte';
+      doorEl.className = 'badge red';
+    }
+  }
+
+  function updateFanBadge(isOn) {
+    const fanEl = document.getElementById('fanStatus');
+    if (isOn) {
+      fanEl.textContent = 'Włączony';
+      fanEl.className = 'badge green';
+    } else {
+      fanEl.textContent = 'Wyłączony';
+      fanEl.className = 'badge red';
+    }
+  }
+
+  function resetBadges() {
+    clearDoorTimer();
+    const doorEl = document.getElementById('doorStatus');
+    const fanEl = document.getElementById('fanStatus');
+    doorEl.textContent = 'Brak danych';
+    doorEl.className = 'badge';
+    fanEl.textContent = 'Brak danych';
+    fanEl.className = 'badge';
+  }
+
+  client.on('message', (topic, message) => {
+    if (topic === 'kurnik/czujniki') {
+      try {
+        const data = JSON.parse(message.toString());
+        if (data.temp !== undefined) document.getElementById('valTemp').textContent = data.temp + ' °C';
+        if (data.wilg !== undefined) document.getElementById('valHum').textContent = data.wilg + ' %';
+        if (data.kury !== undefined) document.getElementById('valHens').textContent = data.kury;
+        if (data.drzwi !== undefined) updateDoorBadge(data.drzwi === 'OTWARTE' || data.drzwi === true);
+        if (data.wentylator !== undefined) updateFanBadge(data.wentylator === 'ON' || data.wentylator === true);
+        addChartPoint(data);
+      } catch (e) { console.error('Błąd JSON:', e); }
+    }
+  });
+
+  function sendCmd(topic, payload) {
+    client.publish(topic, payload);
+  }
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('btnAuto').classList.toggle('active', mode === 'AUTO');
+    document.getElementById('btnManual').classList.toggle('active', mode === 'MANUAL');
+
+    const isManual = (mode === 'MANUAL');
+    document.getElementById('btnDoorOpen').disabled = !isManual;
+    document.getElementById('btnDoorClose').disabled = !isManual;
+    document.getElementById('btnFanOn').disabled = !isManual;
+    document.getElementById('btnFanOff').disabled = !isManual;
+
+    if (!isManual) {
+      resetBadges();
+    }
+
+    sendCmd('kurnik/drzwi/sterowanie', mode);
+  }
+
+  function controlDoor(action) {
+    if (currentMode !== 'MANUAL') return;
+    clearDoorTimer();
+    sendCmd('kurnik/drzwi/sterowanie', action);
+
+    const doorEl = document.getElementById('doorStatus');
+    doorEl.textContent = (action === 'OTWORZ') ? 'Otwieranie...' : 'Zamykanie...';
+    doorEl.className = 'badge orange';
+
+    doorTimer = setTimeout(() => {
+      doorEl.textContent = 'Błąd / Brak odp.';
+      doorEl.className = 'badge red';
+      doorTimer = null;
+    }, DOOR_TIMEOUT_MS);
+  }
+
+  function controlFan(action) {
+    if (currentMode !== 'MANUAL') return;
+    sendCmd('kurnik/wentylator/sterowanie', action);
+    updateFanBadge(action === 'ON');
+  }
+
+  function saveSchedule() {
+    const payload = JSON.stringify({
+      otwarcie: document.getElementById('timeOpen').value,
+      zamkniecie: document.getElementById('timeClose').value
+    });
+    sendCmd('kurnik/harmonogram', payload);
+    alert('Zapisano nowy harmonogram: ' + payload);
+  }
+
+  function saveFeedSettings() {
+    const grams = document.getElementById('feedAmount').value;
+    localStorage.setItem('kurnik_feed_grams', grams);
+    document.getElementById('displayFeedGrams').textContent = grams + ' g';
+    sendCmd('kurnik/pasza/ustawienia', grams.toString());
+    alert('Zapisano porcję paszy: ' + grams + ' g');
+  }
+
+  function dispenseFeed() {
+    const grams = document.getElementById('feedAmount').value;
+    sendCmd('kurnik/pasza/dozuj', grams.toString());
+    alert('Wysłano polecenie podania: ' + grams + ' g');
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.nav button').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('nav-' + tab).classList.add('active');
+  }
+
+  const labels = [];
+  const tempData = [];
+  const humData = [];
+  const hensData = [];
+
+  const envChart = new Chart(document.getElementById('envChart'), {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Temp (°C)', data: tempData, borderColor: '#38bdf8', tension: 0.3 },
+        { label: 'Wilg (%)', data: humData, borderColor: '#22c55e', tension: 0.3 }
+      ]
+    },
+    options: { scales: { x: { ticks: { color: '#94a3b8' } }, y: { ticks: { color: '#94a3b8' } } } }
+  });
+
+  const hensChart = new Chart(document.getElementById('hensChart'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{ label: 'Kury w środku', data: hensData, backgroundColor: '#f59e0b' }]
+    },
+    options: { scales: { x: { ticks: { color: '#94a3b8' } }, y: { beginAtZero: true, ticks: { stepSize: 1, color: '#94a3b8' } } } }
+  });
+
+  function addChartPoint(data) {
+    const time = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (labels.length >= 20) { labels.shift(); tempData.shift(); humData.shift(); hensData.shift(); }
+    labels.push(time);
+    tempData.push(data.temp ?? null);
+    humData.push(data.wilg ?? null);
+    hensData.push(data.kury ?? null);
+    envChart.update();
+    hensChart.update();
+  }
+</script>
+</body>
+</html>
